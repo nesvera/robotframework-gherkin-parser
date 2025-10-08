@@ -1,5 +1,6 @@
 import ast
 import re
+import os
 from os import PathLike
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -71,7 +72,7 @@ def find_ast_node_id(
     return None, None
 
 
-def build_gherkin_model(source: PathLike[str], content: Optional[str] = None) -> Tuple[ast.AST, Optional[str]]:
+def build_gherkin_model(source: PathLike[str], content: Optional[str] = None, resource_path: Optional[str] = None) -> Tuple[ast.AST, Optional[str]]:
     try:
         path = Path(source).resolve()
 
@@ -161,7 +162,12 @@ def build_gherkin_model(source: PathLike[str], content: Optional[str] = None) ->
                 test_case.header.tokens[0].col_offset = location.column - 1
             test_cases.append(test_case)
 
-        resources = [f for f in iter_files(path.parent, "**/*.resource") if not f.stem.startswith(("_", "."))]
+        resources = []
+        if resource_path is None:
+            resources = [f for f in iter_files(path.parent, "**/*.resource") if not f.stem.startswith(("_", "."))]
+        else:
+            r_path = Path(resource_path).resolve()
+            resources = [f for f in iter_files(r_path, "**/*.resource") if not f.stem.startswith(("_", "."))]
 
         doc = gherkin_document["feature"]["description"].strip()
         settings = [
@@ -169,7 +175,7 @@ def build_gherkin_model(source: PathLike[str], content: Optional[str] = None) ->
             LibraryImport.from_params("GherkinParser.Library"),
             *[
                 ResourceImport.from_params(f)
-                for f in sorted((str(r.relative_to(path.parent).as_posix()) for r in resources), key=str)
+                for f in sorted((str(os.path.relpath(str(r), start=str(path.parent))) for r in resources), key=str)
             ],
             *(
                 [
